@@ -181,7 +181,7 @@ export default function ChatScreen() {
           : "";
     p += effort;
     p +=
-      ' Puedes buscar en internet. Cuando necesites información actual o que no conozcas, responde ÚNICAMENTE con este bloque y nada más:\n```waise-action\n{"tool":"web_search","query":"términos de búsqueda"}\n```\nTambién puedes leer una página concreta con {"tool":"web_fetch","url":"https://…"}. Recibirás un mensaje que empieza por [resultado web] con los datos; entonces responde al usuario con normalidad citando lo aprendido, sin mencionar el mecanismo interno.';
+      ' Puedes buscar en internet. Cuando necesites información actual o que no conozcas, responde ÚNICAMENTE con este bloque y nada más:\n```waise-action\n{"tool":"web_search","query":"términos de búsqueda"}\n```\nTambién puedes leer una página concreta con {"tool":"web_fetch","url":"https://…"}. Recibirás un mensaje que empieza por [resultado web] con los datos; entonces responde al usuario con normalidad citando lo aprendido, sin mencionar el mecanismo interno. Reglas de búsqueda: usa los términos del usuario tal cual, NUNCA añadas nombres de empresas o marcas que el usuario no mencionó. No asumas quién fabrica un producto: confía en lo que digan los resultados. Lo de no revelar proveedores aplica SOLO a tu propia identidad; sobre otras empresas y modelos de IA (Anthropic, Claude, OpenAI, Google, etc.) responde con total normalidad y objetividad usando los resultados de la búsqueda.';
     if (prefs.custom_instructions?.trim()) p += ` Instrucciones del usuario: ${prefs.custom_instructions.trim()}`;
     return p;
   }
@@ -354,7 +354,6 @@ export default function ChatScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={insets.top + HEADER_HEIGHT}
       >
         {messages.length === 0 && !busy ? (
           <View style={styles.empty}>

@@ -26,7 +26,7 @@ export function fontSize(size: "sm" | "md" | "lg"): number {
 }
 
 /** Floating WhatsApp-style tab bar metrics (see navigation.tsx). */
-export const TAB_BAR_HEIGHT = 66;
+export const TAB_BAR_HEIGHT = 72;
 export const TAB_BAR_SIDE_MARGIN = 14;
 
 /** Vertical space screens must leave free so content doesn't hide under the floating bar. */
