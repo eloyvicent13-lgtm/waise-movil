@@ -1,0 +1,38 @@
+name: iOS build + TestFlight
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Build iOS (.ipa) on this runner (no EAS quota)
+        run: eas build --platform ios --profile production --local --non-interactive --output build.ipa
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Submit to TestFlight
+        run: eas submit --platform ios --path build.ipa --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Upload .ipa as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waise-ipa
+          path: build.ipa
+          if-no-files-found: ignore
