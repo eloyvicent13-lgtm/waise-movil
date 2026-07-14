@@ -1,3 +1,4 @@
+# Build de iOS y subida a TestFlight (lanzar manualmente desde Actions)
 name: iOS build + TestFlight
 
 on:
