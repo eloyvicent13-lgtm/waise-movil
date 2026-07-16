@@ -1,10 +1,32 @@
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { serverFetch } from "../lib/auth";
+import { loginCode, planInfo } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { usePrefs } from "../lib/prefs";
 import { ACCENTS, type Accent, colors } from "../lib/theme";
+import type { PlanInfo } from "../lib/types";
 import Glass from "../components/Glass";
+
+const WEB_URL = "http://149.202.84.78:8126";
+const BUCKET_LABEL: Record<string, string> = {
+  lumin: "Lumin Vera 3",
+  geminiEcon: "Gemini económicos",
+  geminiPremium: "Gemini 3.5 Flash / 3.1 Pro",
+  nanoBanana: "Nano Banana",
+  nanoBananaPro: "Nano Banana Pro",
+  video: "Vídeo",
+};
+
+async function openBilling(plan?: string) {
+  try {
+    const { code } = await loginCode();
+    const url = `${WEB_URL}/auth/consume?code=${encodeURIComponent(code)}${plan ? `&plan=${plan}` : ""}`;
+    Linking.openURL(url);
+  } catch {
+    Linking.openURL(`${WEB_URL}/precios`);
+  }
+}
 
 const ACCENT_LIST: { id: Accent; label: string }[] = [
   { id: "gold", label: "Dorado" },
@@ -34,9 +56,11 @@ export default function SettingsScreen() {
   const [unlocked, setUnlocked] = useState(false);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
+  const [plan, setPlan] = useState<PlanInfo | null>(null);
 
   useEffect(() => {
     serverFetch("/me").then((r) => r.json()).then((d) => setUsername(d.username || "")).catch(() => {});
+    planInfo().then(setPlan).catch(() => {});
   }, []);
 
   function tryUnlock() {
@@ -122,6 +146,51 @@ export default function SettingsScreen() {
         </View>
       </Section>
 
+      <Section title="Plan">
+        {!plan ? (
+          <Text style={styles.label}>Cargando…</Text>
+        ) : (
+          <>
+            <View style={styles.planHeadRow}>
+              <Text style={[styles.planName, { color: accent.color }]}>{plan.label}</Text>
+              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: accent.color }]} onPress={() => openBilling()}>
+                <Text style={[styles.smallBtnText, { color: accent.ink }]}>{plan.plan === "free" ? "Suscribirme" : "Cambiar plan"}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.label, { marginTop: 14 }]}>Uso — 5h / semana</Text>
+            {(["lumin", "geminiEcon", "geminiPremium"] as const).map((b) => {
+              const d = plan.buckets[b];
+              const pct = d.limit5h > 0 ? Math.min(100, Math.round((d.used5h / d.limit5h) * 100)) : 0;
+              return (
+                <View key={b} style={styles.usageRow}>
+                  <View style={styles.usageHead}>
+                    <Text style={styles.usageName}>{BUCKET_LABEL[b]}</Text>
+                    <Text style={styles.usageNums}>{d.limit5h > 0 ? `${d.used5h}/${d.limit5h} · 5h — ${d.usedWeek}/${d.limitWeek} · sem` : "no incluido"}</Text>
+                  </View>
+                  <View style={styles.barTrack}><View style={[styles.barFill, pct >= 85 && styles.barFillWarn, { width: `${pct}%` }]} /></View>
+                </View>
+              );
+            })}
+
+            <Text style={[styles.label, { marginTop: 14 }]}>Uso — cuota mensual</Text>
+            {(["nanoBanana", "nanoBananaPro", "video"] as const).map((b) => {
+              const d = plan.buckets[b];
+              const pct = d.limit > 0 ? Math.min(100, Math.round((d.used / d.limit) * 100)) : 0;
+              return (
+                <View key={b} style={styles.usageRow}>
+                  <View style={styles.usageHead}>
+                    <Text style={styles.usageName}>{BUCKET_LABEL[b]}</Text>
+                    <Text style={styles.usageNums}>{d.limit > 0 ? `${d.used}/${d.limit}` : "no incluido"}</Text>
+                  </View>
+                  <View style={styles.barTrack}><View style={[styles.barFill, pct >= 85 && styles.barFillWarn, { width: `${pct}%` }]} /></View>
+                </View>
+              );
+            })}
+          </>
+        )}
+      </Section>
+
       <Section title="Cuenta">
         <View style={styles.account}>
           <View style={[styles.avatar, { backgroundColor: accent.color }]}>
@@ -175,4 +244,13 @@ const styles = StyleSheet.create({
   aboutRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
   aboutVal: { color: colors.dim, fontSize: 13 },
   aboutValMono: { color: colors.dim, fontSize: 12, fontFamily: "monospace" },
+  planHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  planName: { fontSize: 16, fontWeight: "800" },
+  usageRow: { marginTop: 10 },
+  usageHead: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  usageName: { color: colors.text, fontSize: 12.5, fontWeight: "700" },
+  usageNums: { color: colors.faint, fontSize: 11.5 },
+  barTrack: { height: 6, borderRadius: 3, backgroundColor: colors.surface2, overflow: "hidden" },
+  barFill: { height: "100%", borderRadius: 3, backgroundColor: colors.green },
+  barFillWarn: { backgroundColor: colors.amber },
 });

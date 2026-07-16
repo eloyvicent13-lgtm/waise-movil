@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { SERVER_URL, getToken, serverFetch } from "./auth";
-import type { ChatMessage, Project, ProjectFileEntry, ProjectMessage, Session } from "./types";
+import type { ChatMessage, PlanInfo, Project, ProjectFileEntry, ProjectMessage, Session } from "./types";
 
 async function json<T>(r: Response): Promise<T> {
   const body = await r.json().catch(() => ({}));
@@ -37,6 +37,9 @@ export async function uploadImage(uri: string, _name: string, mime: string): Pro
   if (res.status >= 400 || !body.url) throw new Error(body.error || `error subiendo imagen (${res.status})`);
   return { url: body.url };
 }
+
+export const planInfo = () => serverFetch("/me/plan").then((r) => json<PlanInfo>(r));
+export const loginCode = () => serverFetch("/auth/login-code", { method: "POST" }).then((r) => json<{ code: string }>(r));
 
 export const listSessions = () => serverFetch("/me/sessions").then((r) => json<Session[]>(r));
 export const saveSession = (s: Session) =>

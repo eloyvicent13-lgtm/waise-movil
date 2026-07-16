@@ -46,6 +46,33 @@ export interface ImageAttachment {
   name: string;
 }
 
+export interface PlanWindowedBucket {
+  used5h: number;
+  limit5h: number;
+  usedWeek: number;
+  limitWeek: number;
+}
+export interface PlanMonthlyBucket {
+  used: number;
+  limit: number;
+  resetsInSeconds: number;
+}
+export interface PlanInfo {
+  plan: "free" | "lite" | "pro" | "ultra";
+  label: string;
+  agent_mode: boolean;
+  max_steps: number;
+  projects: number;
+  buckets: {
+    lumin: PlanWindowedBucket;
+    geminiEcon: PlanWindowedBucket;
+    geminiPremium: PlanWindowedBucket;
+    nanoBanana: PlanMonthlyBucket;
+    nanoBananaPro: PlanMonthlyBucket;
+    video: PlanMonthlyBucket;
+  };
+}
+
 export interface UiMessage {
   id: string;
   role: "user" | "assistant";
