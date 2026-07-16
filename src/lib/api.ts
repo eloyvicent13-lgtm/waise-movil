@@ -63,3 +63,11 @@ export const writeProjectFile = (id: string, path: string, content: string) =>
   );
 export const listProjectMessages = (id: string) =>
   serverFetch(`/projects/${id}/messages`).then((r) => json<ProjectMessage[]>(r));
+
+/** Generate an image with a Gemini image model (Nano Banana) via our server. */
+export async function generateImage(model: string, prompt: string): Promise<{ image: string; text?: string }> {
+  const r = await serverFetch("/image", { method: "POST", body: JSON.stringify({ model, prompt }) });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok || !body.image) throw new Error(body.error || `error ${r.status}`);
+  return { image: body.image, text: body.text };
+}

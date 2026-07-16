@@ -7,6 +7,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -18,7 +19,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { chat, saveSession, uploadImage } from "../lib/api";
+import { chat, generateImage, saveSession, uploadImage } from "../lib/api";
 import { webFetch, webSearch } from "../lib/websearch";
 import type { ChatMessage, ImageAttachment, Session, UiMessage } from "../lib/types";
 import { usePrefs } from "../lib/prefs";
@@ -30,6 +31,25 @@ import HistorySheet from "../components/HistorySheet";
 const uid = () => Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2, 6);
 const HEADER_HEIGHT = 54;
 const MAX_TOOL_ROUNDS = 3;
+
+interface ModelEntry {
+  id: string;
+  label: string;
+  short: string;
+  image?: boolean;
+}
+
+const MODELS: ModelEntry[] = [
+  { id: "lumin-vera-3", label: "Waise (Vera 3)", short: "Vera 3" },
+  { id: "gemini-3.1-pro", label: "Gemini 3.1 Pro", short: "3.1 Pro" },
+  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", short: "3.5 Flash" },
+  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite", short: "3.1 Lite" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", short: "2.5 Pro" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", short: "2.5 Flash" },
+  { id: "gemini-2-flash", label: "Gemini 2 Flash", short: "2 Flash" },
+  { id: "gemini-2.5-flash-image", label: "Nano Banana · imágenes", short: "Nano 🍌", image: true },
+  { id: "gemini-3.1-flash-lite-image", label: "Nano Banana 2 Lite · imágenes", short: "Nano 2 🍌", image: true },
+];
 
 interface WebAction {
   tool: "web_search" | "web_fetch";
@@ -134,6 +154,9 @@ export default function ChatScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [kbOpen, setKbOpen] = useState(false);
+  const [modelId, setModelId] = useState("lumin-vera-3");
+  const [modelOpen, setModelOpen] = useState(false);
+  const model = MODELS.find((m) => m.id === modelId) || MODELS[0];
   const listRef = useRef<FlatList>(null);
   const apiRef = useRef<ChatMessage[]>([]);
   const sessionRef = useRef<{ id: string; title: string; created_at: string } | null>(null);
@@ -231,8 +254,8 @@ export default function ChatScreen() {
       title: s.title,
       created_at: s.created_at,
       updated_at: new Date().toISOString(),
-      model: "lumin-vera-3",
-      provider_id: "lumin",
+      model: modelId,
+      provider_id: modelId.startsWith("gemini") ? "gemini" : "lumin",
       workspace: null,
       messages: msgs,
     };
@@ -271,6 +294,24 @@ export default function ChatScreen() {
     setBusy(true);
     setStatus(null);
 
+    // Image models (Nano Banana): one prompt in, one image out.
+    if (model.image) {
+      apiRef.current.push({ role: "user", content: t });
+      setStatus("🎨 generando imagen…");
+      try {
+        const r = await generateImage(modelId, t);
+        apiRef.current.push({ role: "assistant", content: r.text || "(imagen generada)" });
+        pushUi({ id: uid(), role: "assistant", content: r.text || "", images: [{ url: r.image, name: "imagen generada" }] });
+      } catch (e) {
+        pushUi({ id: uid(), role: "assistant", content: `⚠ Error: ${String(e)}` });
+      } finally {
+        setBusy(false);
+        setStatus(null);
+      }
+      persist();
+      return;
+    }
+
     const userContent = images.length
       ? [
           { type: "text" as const, text: t },
@@ -282,7 +323,7 @@ export default function ChatScreen() {
     try {
       let rounds = 0;
       for (;;) {
-        const r = await chat("lumin-vera-3", [{ role: "system", content: systemPrompt() }, ...apiRef.current]);
+        const r = await chat(modelId, [{ role: "system", content: systemPrompt() }, ...apiRef.current]);
         const reply = r.choices?.[0]?.message?.content ?? "";
         const act = rounds < MAX_TOOL_ROUNDS ? parseAction(reply) : null;
         if (!act) {
@@ -298,7 +339,7 @@ export default function ChatScreen() {
           content: "",
           search: act.tool === "web_search" ? `Buscó: ${act.query}` : `Leyó: ${act.url}`,
         });
-        setStatus("buscando en internet…");
+        setStatus("🌐 buscando en internet…");
         let resultText: string;
         try {
           if (act.tool === "web_search") {
@@ -339,8 +380,40 @@ export default function ChatScreen() {
         onNew={newChat}
       />
 
+      <Modal visible={modelOpen} transparent animationType="fade" onRequestClose={() => setModelOpen(false)}>
+        <Pressable style={styles.modelBackdrop} onPress={() => setModelOpen(false)} />
+        <View style={[styles.modelSheet, { top: insets.top + HEADER_HEIGHT }]}>
+          <Glass radius={20} intensity={60}>
+            <View style={{ padding: 10 }}>
+              <Text style={styles.modelTitle}>Modelo</Text>
+              {MODELS.map((m) => (
+                <TouchableOpacity
+                  key={m.id}
+                  style={styles.modelRow}
+                  onPress={() => {
+                    setModelId(m.id);
+                    setModelOpen(false);
+                  }}
+                >
+                  <Text style={[styles.modelRowText, m.id === modelId && { color: accent.color, fontWeight: "800" }]}>
+                    {m.label}
+                  </Text>
+                  {m.id === modelId && <Ionicons name="checkmark" size={16} color={accent.color} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Glass>
+        </View>
+      </Modal>
+
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Waise</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Text style={styles.headerTitle}>Waise</Text>
+          <TouchableOpacity style={styles.modelPill} onPress={() => setModelOpen(true)}>
+            <Text style={[styles.modelPillText, { color: accent.color }]}>{model.short}</Text>
+            <Ionicons name="chevron-down" size={12} color={colors.dim} />
+          </TouchableOpacity>
+        </View>
         <View style={styles.headerBtns}>
           <TouchableOpacity style={styles.headerBtn} onPress={() => setHistoryOpen(true)}>
             <Ionicons name="time-outline" size={19} color={colors.text} />
@@ -383,7 +456,7 @@ export default function ChatScreen() {
                 return (
                   <View style={[styles.bubble, styles.bubbleAi, { borderLeftColor: accent.color }]}>
                     <Text style={[styles.role, { color: accent.color }]}>Waise</Text>
-                    {status ? <Text style={styles.statusText}>🌐 {status}</Text> : <TypingDots color={accent.color} />}
+                    {status ? <Text style={styles.statusText}>{status}</Text> : <TypingDots color={accent.color} />}
                   </View>
                 );
               }
@@ -450,7 +523,7 @@ export default function ChatScreen() {
               </TouchableOpacity>
               <TextInput
                 style={[styles.input, { fontSize: fs }]}
-                placeholder="Escribe a Waise…"
+                placeholder={model.image ? "Describe la imagen a generar…" : "Escribe a Waise…"}
                 placeholderTextColor={colors.faint}
                 value={text}
                 onChangeText={setText}
@@ -490,6 +563,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   headerTitle: { color: colors.text, fontSize: 26, fontWeight: "800", letterSpacing: -0.6 },
+  modelPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.surface2,
+    borderWidth: 1,
+    borderColor: colors.strokeSoft,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  modelPillText: { fontSize: 12, fontWeight: "800" },
+  modelBackdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" },
+  modelSheet: { position: "absolute", left: 16, right: 16 },
+  modelTitle: {
+    color: colors.faint,
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    padding: 8,
+    paddingBottom: 4,
+  },
+  modelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 11,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  modelRowText: { color: colors.text, fontSize: 14.5, fontWeight: "600" },
   headerBtns: { flexDirection: "row", gap: 8 },
   headerBtn: {
     width: 38,
