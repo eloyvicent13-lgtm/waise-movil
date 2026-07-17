@@ -21,16 +21,16 @@ function fmtDuration(seconds: number | null): string {
 }
 
 const BUCKET_LABEL: Record<string, string> = {
-  lumin: "Lumin Vera 3",
-  gpt5mini: "GPT-5 Mini",
-  kimik3: "Kimi K3",
-  nanoBanana: "Nano Banana (DALL-E 3)",
+  lumin: "Waise Fast",
+  gpt5mini: "Waise Code",
+  kimik3: "Waise Code Pro",
+  nanoBanana: "Waise Image",
 };
 
 const TOPUP_LABEL: Record<string, { label: string; short: string }> = {
-  gpt5mini_tokens: { label: "Pack Rápido (GPT-5 Mini)", short: "tokens" },
-  kimik3_tokens: { label: "Pack Razonamiento Avanzado (Kimi K3)", short: "tokens" },
-  dalle3_images: { label: "Pack Diseño (Nano Banana)", short: "imágenes" },
+  gpt5mini_tokens: { label: "Pack Rápido (Waise Code)", short: "tokens" },
+  kimik3_tokens: { label: "Pack Razonamiento Avanzado (Waise Code Pro)", short: "tokens" },
+  dalle3_images: { label: "Pack Diseño (Waise Image)", short: "imágenes" },
 };
 
 async function openBilling(plan?: string, topup?: string) {

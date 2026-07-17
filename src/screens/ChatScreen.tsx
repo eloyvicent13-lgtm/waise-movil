@@ -40,10 +40,10 @@ interface ModelEntry {
 }
 
 const MODELS: ModelEntry[] = [
-  { id: "lumin-vera-3", label: "Waise (Vera 3)", short: "Vera 3" },
-  { id: "gpt-5-mini", label: "GPT-5 Mini", short: "GPT-5 Mini" },
-  { id: "kimi-k3", label: "Kimi K3 (razonamiento)", short: "Kimi K3" },
-  { id: "dall-e-3", label: "Nano Banana · imágenes", short: "Nano 🍌", image: true },
+  { id: "lumin-vera-3", label: "Waise Fast", short: "Fast" },
+  { id: "gpt-5-mini", label: "Waise Code", short: "Code" },
+  { id: "kimi-k3", label: "Waise Code Pro", short: "Code Pro" },
+  { id: "dall-e-3", label: "Waise Image", short: "Image", image: true },
 ];
 
 interface WebAction {
