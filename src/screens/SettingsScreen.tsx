@@ -9,6 +9,17 @@ import type { PlanInfo } from "../lib/types";
 import Glass from "../components/Glass";
 
 const WEB_URL = "http://149.202.84.78:8126";
+
+function fmtDuration(seconds: number | null): string {
+  if (seconds == null || seconds <= 0) return "";
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 const BUCKET_LABEL: Record<string, string> = {
   lumin: "Lumin Vera 3",
   geminiEcon: "Gemini económicos",
@@ -166,7 +177,11 @@ export default function SettingsScreen() {
                 <View key={b} style={styles.usageRow}>
                   <View style={styles.usageHead}>
                     <Text style={styles.usageName}>{BUCKET_LABEL[b]}</Text>
-                    <Text style={styles.usageNums}>{d.limit5h > 0 ? `${d.used5h}/${d.limit5h} · 5h — ${d.usedWeek}/${d.limitWeek} · sem` : "no incluido"}</Text>
+                    <Text style={styles.usageNums}>
+                      {d.limit5h > 0
+                        ? `${d.used5h}/${d.limit5h} · 5h${fmtDuration(d.resets5hInSeconds) ? ` (${fmtDuration(d.resets5hInSeconds)})` : ""} — ${d.usedWeek}/${d.limitWeek} · sem${fmtDuration(d.resetsWeekInSeconds) ? ` (${fmtDuration(d.resetsWeekInSeconds)})` : ""}`
+                        : "no incluido"}
+                    </Text>
                   </View>
                   <View style={styles.barTrack}><View style={[styles.barFill, pct >= 85 && styles.barFillWarn, { width: `${pct}%` }]} /></View>
                 </View>

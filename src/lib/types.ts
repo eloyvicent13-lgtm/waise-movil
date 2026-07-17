@@ -51,6 +51,8 @@ export interface PlanWindowedBucket {
   limit5h: number;
   usedWeek: number;
   limitWeek: number;
+  resets5hInSeconds: number | null;
+  resetsWeekInSeconds: number | null;
 }
 export interface PlanMonthlyBucket {
   used: number;
