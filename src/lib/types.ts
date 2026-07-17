@@ -73,12 +73,34 @@ export interface PlanInfo {
   };
 }
 
+export interface AiChatSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface AiChat extends AiChatSummary {
+  owner: string;
+  messages: ChatMessage[];
+}
+
+export type ProjectToolName = "read_file" | "list_dir" | "todo_write" | "create_file" | "write_file" | "edit_file" | "delete_file";
+export interface ProjectAction {
+  tool: ProjectToolName;
+  args: Record<string, string>;
+}
+export type ActionStatus = "pending" | "auto" | "approved" | "denied" | "done" | "error";
+
 export interface UiMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   content: string;
   images?: ImageAttachment[];
   streaming?: boolean;
   /** Small centered pill: web tool activity ("Buscó: …" / "Leyó: …"). */
   search?: string;
+  raw?: string;
+  action?: ProjectAction;
+  actionStatus?: ActionStatus;
+  actionResult?: string;
 }

@@ -31,8 +31,18 @@ export const register = (u: string, p: string) => authRequest("/auth/register", 
 export async function serverFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const token = await getToken();
   if (!token) throw new Error("no has iniciado sesión");
-  return fetch(`${SERVER_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init.headers || {}), Authorization: `Bearer ${token}` },
-  });
+  try {
+    return await fetch(`${SERVER_URL}${path}`, {
+      ...init,
+      // Without this, a stalled connection hangs the request forever (looks
+      // like the app "freezing") instead of failing with a retryable error.
+      signal: init.signal ?? AbortSignal.timeout(90_000),
+      headers: { "Content-Type": "application/json", ...(init.headers || {}), Authorization: `Bearer ${token}` },
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "TimeoutError") {
+      throw new Error("El servidor no respondió a tiempo (90s). Inténtalo de nuevo.");
+    }
+    throw e;
+  }
 }

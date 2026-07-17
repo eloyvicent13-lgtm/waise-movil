@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { SERVER_URL, getToken, serverFetch } from "./auth";
-import type { ChatMessage, PlanInfo, Project, ProjectFileEntry, ProjectMessage, Session } from "./types";
+import type { AiChat, AiChatSummary, ChatMessage, PlanInfo, Project, ProjectFileEntry, ProjectMessage, Session } from "./types";
 
 async function json<T>(r: Response): Promise<T> {
   const body = await r.json().catch(() => ({}));
@@ -64,8 +64,55 @@ export const writeProjectFile = (id: string, path: string, content: string) =>
   serverFetch(`/projects/${id}/file`, { method: "PUT", body: JSON.stringify({ path, content }) }).then((r) =>
     json(r),
   );
+export const deleteProjectFile = (id: string, path: string) =>
+  serverFetch(`/projects/${id}/file?path=${encodeURIComponent(path)}`, { method: "DELETE" }).then((r) => json(r));
 export const listProjectMessages = (id: string) =>
   serverFetch(`/projects/${id}/messages`).then((r) => json<ProjectMessage[]>(r));
+
+// ---- per-project AI chats (each user's own conversation with Waise) ----
+export const listProjectAiChats = (id: string) =>
+  serverFetch(`/projects/${id}/ai-chats`).then((r) => json<AiChatSummary[]>(r));
+export const getProjectAiChat = (id: string, chatId: string) =>
+  serverFetch(`/projects/${id}/ai-chats/${chatId}`).then((r) => json<AiChat>(r));
+export const saveProjectAiChat = (id: string, chatId: string, title: string, messages: ChatMessage[]) =>
+  serverFetch(`/projects/${id}/ai-chats/${chatId}`, { method: "PUT", body: JSON.stringify({ title, messages }) }).then(
+    (r) => json<AiChat>(r),
+  );
+
+/**
+ * Upload a local file into a shared project's files (multipart, same native
+ * uploader as uploadImage — fetch's FormData rejects RN's {uri,name,type} part).
+ */
+export async function uploadProjectFile(id: string, dir: string, uri: string, name: string, mime: string): Promise<{ path: string }> {
+  const token = await getToken();
+  if (!token) throw new Error("inicia sesión primero");
+  const res = await FileSystem.uploadAsync(`${SERVER_URL}/projects/${id}/upload`, uri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "file",
+    mimeType: mime,
+    parameters: { path: dir },
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  let body: { path?: string; error?: string } = {};
+  try {
+    body = JSON.parse(res.body);
+  } catch {}
+  if (res.status >= 400 || !body.path) throw new Error(body.error || `error subiendo archivo (${res.status})`);
+  return { path: body.path };
+}
+
+/** Download the project's full zip export to local storage; returns the local file uri. */
+export async function exportProjectZip(id: string, projectName: string): Promise<string> {
+  const token = await getToken();
+  if (!token) throw new Error("inicia sesión primero");
+  const dest = `${FileSystem.documentDirectory}${projectName.replace(/[^\w.-]+/g, "_")}.zip`;
+  const res = await FileSystem.downloadAsync(`${SERVER_URL}/projects/${id}/export`, dest, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status >= 400) throw new Error(`error exportando el proyecto (${res.status})`);
+  return res.uri;
+}
 
 /** Generate an image with a Gemini image model (Nano Banana) via our server. */
 export async function generateImage(model: string, prompt: string): Promise<{ image: string; text?: string }> {
