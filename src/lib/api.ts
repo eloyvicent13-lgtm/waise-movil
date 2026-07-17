@@ -114,7 +114,7 @@ export async function exportProjectZip(id: string, projectName: string): Promise
   return res.uri;
 }
 
-/** Generate an image with a Gemini image model (Nano Banana) via our server. */
+/** Generate an image with Nano Banana (backed by DALL-E 3) via our server. */
 export async function generateImage(model: string, prompt: string): Promise<{ image: string; text?: string }> {
   const r = await serverFetch("/image", { method: "POST", body: JSON.stringify({ model, prompt }) });
   const body = await r.json().catch(() => ({}));

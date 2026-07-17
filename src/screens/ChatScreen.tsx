@@ -41,14 +41,9 @@ interface ModelEntry {
 
 const MODELS: ModelEntry[] = [
   { id: "lumin-vera-3", label: "Waise (Vera 3)", short: "Vera 3" },
-  { id: "gemini-3.1-pro", label: "Gemini 3.1 Pro", short: "3.1 Pro" },
-  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", short: "3.5 Flash" },
-  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite", short: "3.1 Lite" },
-  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", short: "2.5 Pro" },
-  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", short: "2.5 Flash" },
-  { id: "gemini-2-flash", label: "Gemini 2 Flash", short: "2 Flash" },
-  { id: "gemini-2.5-flash-image", label: "Nano Banana · imágenes", short: "Nano 🍌", image: true },
-  { id: "gemini-3.1-flash-lite-image", label: "Nano Banana 2 Lite · imágenes", short: "Nano 2 🍌", image: true },
+  { id: "gpt-5-mini", label: "GPT-5 Mini", short: "GPT-5 Mini" },
+  { id: "kimi-k3", label: "Kimi K3 (razonamiento)", short: "Kimi K3" },
+  { id: "dall-e-3", label: "Nano Banana · imágenes", short: "Nano 🍌", image: true },
 ];
 
 interface WebAction {
@@ -255,7 +250,7 @@ export default function ChatScreen() {
       created_at: s.created_at,
       updated_at: new Date().toISOString(),
       model: modelId,
-      provider_id: modelId.startsWith("gemini") ? "gemini" : "lumin",
+      provider_id: modelId.startsWith("gpt-") ? "openai" : modelId.startsWith("kimi-") ? "moonshot" : "lumin",
       workspace: null,
       messages: msgs,
     };

@@ -22,17 +22,21 @@ function fmtDuration(seconds: number | null): string {
 
 const BUCKET_LABEL: Record<string, string> = {
   lumin: "Lumin Vera 3",
-  geminiEcon: "Gemini económicos",
-  geminiPremium: "Gemini 3.5 Flash / 3.1 Pro",
-  nanoBanana: "Nano Banana",
-  nanoBananaPro: "Nano Banana Pro",
-  video: "Vídeo",
+  gpt5mini: "GPT-5 Mini",
+  kimik3: "Kimi K3",
+  nanoBanana: "Nano Banana (DALL-E 3)",
 };
 
-async function openBilling(plan?: string) {
+const TOPUP_LABEL: Record<string, { label: string; short: string }> = {
+  gpt5mini_tokens: { label: "Pack Rápido (GPT-5 Mini)", short: "tokens" },
+  kimik3_tokens: { label: "Pack Razonamiento Avanzado (Kimi K3)", short: "tokens" },
+  dalle3_images: { label: "Pack Diseño (Nano Banana)", short: "imágenes" },
+};
+
+async function openBilling(plan?: string, topup?: string) {
   try {
     const { code } = await loginCode();
-    const url = `${WEB_URL}/auth/consume?code=${encodeURIComponent(code)}${plan ? `&plan=${plan}` : ""}`;
+    const url = `${WEB_URL}/auth/consume?code=${encodeURIComponent(code)}${plan ? `&plan=${plan}` : ""}${topup ? `&topup=${topup}` : ""}`;
     Linking.openURL(url);
   } catch {
     Linking.openURL(`${WEB_URL}/precios`);
@@ -170,26 +174,29 @@ export default function SettingsScreen() {
             </View>
 
             <Text style={[styles.label, { marginTop: 14 }]}>Uso — 5h / semana</Text>
-            {(["lumin", "geminiEcon", "geminiPremium"] as const).map((b) => {
+            {(["lumin", "gpt5mini", "kimik3"] as const).map((b) => {
               const d = plan.buckets[b];
+              const unlimited = d.limit5h === -1;
               const pct = d.limit5h > 0 ? Math.min(100, Math.round((d.used5h / d.limit5h) * 100)) : 0;
               return (
                 <View key={b} style={styles.usageRow}>
                   <View style={styles.usageHead}>
                     <Text style={styles.usageName}>{BUCKET_LABEL[b]}</Text>
                     <Text style={styles.usageNums}>
-                      {d.limit5h > 0
+                      {unlimited
+                        ? "ilimitado"
+                        : d.limit5h > 0
                         ? `${d.used5h}/${d.limit5h} · 5h${fmtDuration(d.resets5hInSeconds) ? ` (${fmtDuration(d.resets5hInSeconds)})` : ""} — ${d.usedWeek}/${d.limitWeek} · sem${fmtDuration(d.resetsWeekInSeconds) ? ` (${fmtDuration(d.resetsWeekInSeconds)})` : ""}`
                         : "no incluido"}
                     </Text>
                   </View>
-                  <View style={styles.barTrack}><View style={[styles.barFill, pct >= 85 && styles.barFillWarn, { width: `${pct}%` }]} /></View>
+                  {!unlimited && <View style={styles.barTrack}><View style={[styles.barFill, pct >= 85 && styles.barFillWarn, { width: `${pct}%` }]} /></View>}
                 </View>
               );
             })}
 
             <Text style={[styles.label, { marginTop: 14 }]}>Uso — cuota mensual</Text>
-            {(["nanoBanana", "nanoBananaPro", "video"] as const).map((b) => {
+            {(["nanoBanana"] as const).map((b) => {
               const d = plan.buckets[b];
               const pct = d.limit > 0 ? Math.min(100, Math.round((d.used / d.limit) * 100)) : 0;
               return (
@@ -202,6 +209,25 @@ export default function SettingsScreen() {
                 </View>
               );
             })}
+
+            <Text style={[styles.label, { marginTop: 14 }]}>Recargas</Text>
+            {Object.entries(plan.topups).some(([, n]) => n > 0) ? (
+              Object.entries(plan.topups)
+                .filter(([, n]) => n > 0)
+                .map(([id, n]) => (
+                  <View key={id} style={styles.usageRow}>
+                    <View style={styles.usageHead}>
+                      <Text style={styles.usageName}>{TOPUP_LABEL[id]?.label || id}</Text>
+                      <Text style={styles.usageNums}>{n.toLocaleString("es-ES")} {TOPUP_LABEL[id]?.short}</Text>
+                    </View>
+                  </View>
+                ))
+            ) : (
+              <Text style={styles.usageNums}>Sin saldo de recargas</Text>
+            )}
+            <TouchableOpacity style={[styles.smallBtn, { backgroundColor: accent.color, marginTop: 10, alignSelf: "flex-start" }]} onPress={() => openBilling(undefined, "catalog")}>
+              <Text style={[styles.smallBtnText, { color: accent.ink }]}>Ver recargas</Text>
+            </TouchableOpacity>
           </>
         )}
       </Section>

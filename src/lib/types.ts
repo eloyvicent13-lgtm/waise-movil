@@ -67,12 +67,11 @@ export interface PlanInfo {
   projects: number;
   buckets: {
     lumin: PlanWindowedBucket;
-    geminiEcon: PlanWindowedBucket;
-    geminiPremium: PlanWindowedBucket;
+    gpt5mini: PlanWindowedBucket;
+    kimik3: PlanWindowedBucket;
     nanoBanana: PlanMonthlyBucket;
-    nanoBananaPro: PlanMonthlyBucket;
-    video: PlanMonthlyBucket;
   };
+  topups: Record<string, number>;
 }
 
 export interface AiChatSummary {
