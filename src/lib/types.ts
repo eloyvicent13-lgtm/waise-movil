@@ -85,6 +85,34 @@ export interface AiChat extends AiChatSummary {
   messages: ChatMessage[];
 }
 
+export interface McpServerEntry {
+  id: string;
+  name: string;
+  preset: string;
+  enabled: boolean;
+  /** Which env keys are already stored server-side (secrets never echo back). */
+  envKeys: string[];
+  /** Only when submitting new/changed credentials. */
+  env?: Record<string, string>;
+}
+
+export interface McpTool {
+  serverId: string;
+  serverName: string;
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface McpServerStatus {
+  id: string;
+  name: string;
+  enabled: boolean;
+  connected: boolean;
+  error: string | null;
+  toolCount: number;
+}
+
 export type ProjectToolName = "read_file" | "list_dir" | "todo_write" | "create_file" | "write_file" | "edit_file" | "delete_file";
 export interface ProjectAction {
   tool: ProjectToolName;

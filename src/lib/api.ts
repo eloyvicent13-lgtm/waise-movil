@@ -1,6 +1,18 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { SERVER_URL, getToken, serverFetch } from "./auth";
-import type { AiChat, AiChatSummary, ChatMessage, PlanInfo, Project, ProjectFileEntry, ProjectMessage, Session } from "./types";
+import type {
+  AiChat,
+  AiChatSummary,
+  ChatMessage,
+  McpServerEntry,
+  McpServerStatus,
+  McpTool,
+  PlanInfo,
+  Project,
+  ProjectFileEntry,
+  ProjectMessage,
+  Session,
+} from "./types";
 
 async function json<T>(r: Response): Promise<T> {
   const body = await r.json().catch(() => ({}));
@@ -113,6 +125,17 @@ export async function exportProjectZip(id: string, projectName: string): Promise
   if (res.status >= 400) throw new Error(`error exportando el proyecto (${res.status})`);
   return res.uri;
 }
+
+// ---- MCP connectors (hosted server-side; mobile can't run local processes) ----
+export const mcpList = () => serverFetch("/me/mcp").then((r) => json<McpServerEntry[]>(r));
+export const mcpSave = (entries: McpServerEntry[]) =>
+  serverFetch("/me/mcp", { method: "PUT", body: JSON.stringify(entries) }).then((r) => json(r));
+export const mcpStatus = () => serverFetch("/me/mcp/status").then((r) => json<McpServerStatus[]>(r));
+export const mcpTools = () => serverFetch("/me/mcp/tools").then((r) => json<McpTool[]>(r));
+export const mcpCall = (toolId: string, args: Record<string, unknown>) =>
+  serverFetch("/me/mcp/call", { method: "POST", body: JSON.stringify({ toolId, args }) }).then((r) =>
+    json<{ result: string }>(r),
+  );
 
 /** Generate an image with Nano Banana (backed by DALL-E 3) via our server. */
 export async function generateImage(model: string, prompt: string): Promise<{ image: string; text?: string }> {

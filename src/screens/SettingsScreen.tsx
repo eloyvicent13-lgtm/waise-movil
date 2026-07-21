@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { serverFetch } from "../lib/auth";
-import { loginCode, planInfo } from "../lib/api";
+import { loginCode, mcpList, mcpSave, mcpStatus, planInfo } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { usePrefs } from "../lib/prefs";
 import { ACCENTS, type Accent, colors } from "../lib/theme";
-import type { PlanInfo } from "../lib/types";
+import type { McpServerEntry, McpServerStatus, PlanInfo } from "../lib/types";
 import Glass from "../components/Glass";
 
 const WEB_URL = "http://149.202.84.78:8126";
@@ -51,6 +51,27 @@ const ACCENT_LIST: { id: Accent; label: string }[] = [
 
 const INSTRUCTIONS_PIN = "8768";
 
+const MCP_PRESETS: { id: string; name: string; fields: { key: string; label: string; secure?: boolean }[] }[] = [
+  {
+    id: "github",
+    name: "GitHub",
+    fields: [{ key: "GITHUB_PERSONAL_ACCESS_TOKEN", label: "Token de acceso personal", secure: true }],
+  },
+  {
+    id: "slack",
+    name: "Slack",
+    fields: [
+      { key: "SLACK_BOT_TOKEN", label: "Bot token (xoxb-…)", secure: true },
+      { key: "SLACK_TEAM_ID", label: "ID del equipo" },
+    ],
+  },
+  {
+    id: "postgres",
+    name: "Postgres",
+    fields: [{ key: "CONNECTION_STRING", label: "Cadena de conexión (postgresql://…)", secure: true }],
+  },
+];
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Glass radius={18} intensity={35}>
@@ -72,11 +93,68 @@ export default function SettingsScreen() {
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [plan, setPlan] = useState<PlanInfo | null>(null);
+  const [connectors, setConnectors] = useState<McpServerEntry[] | null>(null);
+  const [connStatus, setConnStatus] = useState<Record<string, McpServerStatus>>({});
+  const [addingPreset, setAddingPreset] = useState<string | null>(null);
+  const [presetFields, setPresetFields] = useState<Record<string, string>>({});
+  const [mcpBusy, setMcpBusy] = useState(false);
 
   useEffect(() => {
     serverFetch("/me").then((r) => r.json()).then((d) => setUsername(d.username || "")).catch(() => {});
     planInfo().then(setPlan).catch(() => {});
+    mcpList()
+      .then((list) => {
+        setConnectors(list);
+        if (list.some((c) => c.enabled)) refreshMcpStatus();
+      })
+      .catch(() => setConnectors([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function refreshMcpStatus() {
+    mcpStatus()
+      .then((list) => setConnStatus(Object.fromEntries(list.map((s) => [s.id, s]))))
+      .catch(() => {});
+  }
+
+  function persistConnectors(next: McpServerEntry[]) {
+    setConnectors(next);
+    setMcpBusy(true);
+    mcpSave(next)
+      .then(refreshMcpStatus)
+      .catch((e) => Alert.alert("Error", String(e).replace(/^Error:\s*/, "")))
+      .finally(() => setMcpBusy(false));
+  }
+
+  function addConnector() {
+    const preset = MCP_PRESETS.find((p) => p.id === addingPreset);
+    if (!preset || !connectors) return;
+    const env: Record<string, string> = {};
+    for (const f of preset.fields) {
+      if (presetFields[f.key]?.trim()) env[f.key] = presetFields[f.key].trim();
+    }
+    const entry: McpServerEntry = {
+      id: `${preset.id}_${Math.random().toString(36).slice(2, 8)}`,
+      name: preset.name,
+      preset: preset.id,
+      enabled: true,
+      envKeys: Object.keys(env),
+      env,
+    };
+    setAddingPreset(null);
+    setPresetFields({});
+    persistConnectors([...connectors, entry]);
+  }
+
+  function toggleConnector(id: string) {
+    if (!connectors) return;
+    persistConnectors(connectors.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c)));
+  }
+
+  function removeConnector(id: string) {
+    if (!connectors) return;
+    persistConnectors(connectors.filter((c) => c.id !== id));
+  }
 
   function tryUnlock() {
     if (pin === INSTRUCTIONS_PIN) {
@@ -232,6 +310,92 @@ export default function SettingsScreen() {
         )}
       </Section>
 
+      <Section title="Conectores">
+        <Text style={styles.connNote}>
+          Herramientas externas (GitHub, Slack, Postgres) que Waise puede usar en el chat. Se conectan a través
+          del servidor de Waise; te pedirá confirmación antes de cada acción.
+        </Text>
+        {connectors === null && <Text style={styles.usageNums}>Cargando…</Text>}
+        {connectors?.map((c) => {
+          const st = connStatus[c.id];
+          return (
+            <View key={c.id} style={styles.connRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.usageName}>{c.name}</Text>
+                <Text style={styles.usageNums}>
+                  {!c.enabled
+                    ? "desactivado"
+                    : st
+                      ? st.connected
+                        ? `conectado · ${st.toolCount} herramientas`
+                        : st.error
+                          ? `error: ${st.error.slice(0, 80)}`
+                          : "conectando…"
+                      : "activado"}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.connToggle, c.enabled && { backgroundColor: accent.color }]}
+                onPress={() => toggleConnector(c.id)}
+                disabled={mcpBusy}
+              >
+                <Text style={[styles.connToggleText, c.enabled && { color: accent.ink }]}>
+                  {c.enabled ? "ON" : "OFF"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.connRemove} onPress={() => removeConnector(c.id)} disabled={mcpBusy}>
+                <Text style={styles.connRemoveText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })}
+
+        {!addingPreset ? (
+          <View style={[styles.row, { marginTop: 12, flexWrap: "wrap", gap: 8 }]}>
+            {MCP_PRESETS.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={styles.connAddBtn}
+                onPress={() => { setAddingPreset(p.id); setPresetFields({}); }}
+              >
+                <Text style={styles.segText}>+ {p.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <View style={{ marginTop: 12 }}>
+            <Text style={styles.label}>{MCP_PRESETS.find((p) => p.id === addingPreset)?.name}</Text>
+            {MCP_PRESETS.find((p) => p.id === addingPreset)?.fields.map((f) => (
+              <TextInput
+                key={f.key}
+                style={[styles.input, { marginTop: 8 }]}
+                placeholder={f.label}
+                placeholderTextColor={colors.faint}
+                value={presetFields[f.key] || ""}
+                onChangeText={(v) => setPresetFields((prev) => ({ ...prev, [f.key]: v }))}
+                secureTextEntry={!!f.secure}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            ))}
+            <View style={[styles.row, { marginTop: 10 }]}>
+              <TouchableOpacity
+                style={[styles.smallBtn, { backgroundColor: accent.color }]}
+                onPress={addConnector}
+                disabled={mcpBusy}
+              >
+                <Text style={[styles.smallBtnText, { color: accent.ink }]}>
+                  {mcpBusy ? "Guardando…" : "Guardar y conectar"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.connAddBtn} onPress={() => setAddingPreset(null)}>
+                <Text style={styles.segText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </Section>
+
       <Section title="Cuenta">
         <View style={styles.account}>
           <View style={[styles.avatar, { backgroundColor: accent.color }]}>
@@ -291,6 +455,13 @@ const styles = StyleSheet.create({
   usageHead: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
   usageName: { color: colors.text, fontSize: 12.5, fontWeight: "700" },
   usageNums: { color: colors.faint, fontSize: 11.5 },
+  connNote: { color: colors.faint, fontSize: 12, lineHeight: 17, marginBottom: 10 },
+  connRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.strokeSoft },
+  connToggle: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.surface2 },
+  connToggleText: { color: colors.text, fontSize: 11, fontWeight: "800" },
+  connRemove: { padding: 6 },
+  connRemoveText: { color: colors.faint, fontSize: 14 },
+  connAddBtn: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: colors.surface2 },
   barTrack: { height: 6, borderRadius: 3, backgroundColor: colors.surface2, overflow: "hidden" },
   barFill: { height: "100%", borderRadius: 3, backgroundColor: colors.green },
   barFillWarn: { backgroundColor: colors.amber },

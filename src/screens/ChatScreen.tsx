@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   Image,
@@ -19,9 +20,9 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { chat, generateImage, saveSession, uploadImage } from "../lib/api";
+import { chat, generateImage, mcpCall, mcpTools, saveSession, uploadImage } from "../lib/api";
 import { webFetch, webSearch } from "../lib/websearch";
-import type { ChatMessage, ImageAttachment, Session, UiMessage } from "../lib/types";
+import type { ChatMessage, ImageAttachment, McpTool, Session, UiMessage } from "../lib/types";
 import { usePrefs } from "../lib/prefs";
 import { ACCENTS, colors, fontSize, tabClearance } from "../lib/theme";
 import Glass from "../components/Glass";
@@ -47,9 +48,10 @@ const MODELS: ModelEntry[] = [
 ];
 
 interface WebAction {
-  tool: "web_search" | "web_fetch";
+  tool: string;
   query?: string;
   url?: string;
+  args?: Record<string, unknown>;
 }
 
 function parseAction(text: string): WebAction | null {
@@ -58,8 +60,29 @@ function parseAction(text: string): WebAction | null {
   try {
     const a = JSON.parse(m[1].trim());
     if (a && (a.tool === "web_search" || a.tool === "web_fetch")) return a as WebAction;
+    if (a && typeof a.tool === "string" && a.tool.startsWith("mcp__"))
+      return { tool: a.tool, args: a.args || {} };
   } catch {}
   return null;
+}
+
+/** "mcp__github_ab12__create_issue" -> "create_issue" */
+function mcpToolLabel(toolId: string): string {
+  return toolId.split("__").pop() || toolId;
+}
+
+function confirmMcp(toolId: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      "Usar conector",
+      `Waise quiere ejecutar "${mcpToolLabel(toolId)}" en un conector externo. ¿Permitir?`,
+      [
+        { text: "Denegar", style: "cancel", onPress: () => resolve(false) },
+        { text: "Permitir", onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
+  });
 }
 
 /** Rebuild renderable messages from a stored session's raw API messages. */
@@ -69,13 +92,19 @@ function toUi(msgs: ChatMessage[]): UiMessage[] {
     if (m.role === "system") continue;
     if (typeof m.content === "string") {
       if (m.role === "user" && m.content.startsWith("[resultado web]")) continue;
+      if (m.role === "user" && m.content.startsWith("[resultado conector]")) continue;
       const act = m.role === "assistant" ? parseAction(m.content) : null;
       if (act) {
         out.push({
           id: uid(),
           role: "assistant",
           content: "",
-          search: act.tool === "web_search" ? `Buscó: ${act.query}` : `Leyó: ${act.url}`,
+          search:
+            act.tool === "web_search"
+              ? `Buscó: ${act.query}`
+              : act.tool === "web_fetch"
+                ? `Leyó: ${act.url}`
+                : `Usó conector: ${mcpToolLabel(act.tool)}`,
         });
         continue;
       }
@@ -155,8 +184,16 @@ export default function ChatScreen() {
   const listRef = useRef<FlatList>(null);
   const apiRef = useRef<ChatMessage[]>([]);
   const sessionRef = useRef<{ id: string; title: string; created_at: string } | null>(null);
+  const mcpToolsRef = useRef<McpTool[]>([]);
 
   const clearance = tabClearance(insets.bottom);
+
+  // MCP connector tools live on the server; refresh the list when the screen mounts.
+  useEffect(() => {
+    mcpTools()
+      .then((tools) => { mcpToolsRef.current = tools; })
+      .catch(() => { mcpToolsRef.current = []; });
+  }, []);
 
   useEffect(() => {
     const showEv = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -200,6 +237,12 @@ export default function ChatScreen() {
     p += effort;
     p +=
       ' Puedes buscar en internet. Cuando necesites información actual o que no conozcas, responde ÚNICAMENTE con este bloque y nada más:\n```waise-action\n{"tool":"web_search","query":"términos de búsqueda"}\n```\nTambién puedes leer una página concreta con {"tool":"web_fetch","url":"https://…"}. Recibirás un mensaje que empieza por [resultado web] con los datos; entonces responde al usuario con normalidad citando lo aprendido, sin mencionar el mecanismo interno. Reglas de búsqueda: usa los términos del usuario tal cual, NUNCA añadas nombres de empresas o marcas que el usuario no mencionó. No asumas quién fabrica un producto: confía en lo que digan los resultados. Lo de no revelar proveedores aplica SOLO a tu propia identidad; sobre otras empresas y modelos de IA (Anthropic, Claude, OpenAI, Google, etc.) responde con total normalidad y objetividad usando los resultados de la búsqueda.';
+    if (mcpToolsRef.current.length) {
+      const list = mcpToolsRef.current
+        .map((t) => `- ${t.id} (conector "${t.serverName}"): ${t.description || t.name}`)
+        .join("\n");
+      p += `\n\nConectores externos disponibles. Se invocan con el mismo formato de bloque, usando el tool exacto (empieza por mcp__) y pasando sus argumentos en "args":\n\`\`\`waise-action\n{"tool":"mcp__…","args":{...}}\n\`\`\`\nRecibirás un mensaje [resultado conector] con la respuesta. El usuario aprueba cada uso.\n${list}`;
+    }
     if (prefs.custom_instructions?.trim()) p += ` Instrucciones del usuario: ${prefs.custom_instructions.trim()}`;
     return p;
   }
@@ -328,6 +371,26 @@ export default function ChatScreen() {
         }
         rounds++;
         apiRef.current.push({ role: "assistant", content: reply });
+
+        if (act.tool.startsWith("mcp__")) {
+          pushUi({ id: uid(), role: "assistant", content: "", search: `Usó conector: ${mcpToolLabel(act.tool)}` });
+          let resultText: string;
+          const allowed = await confirmMcp(act.tool);
+          if (!allowed) {
+            resultText = "el usuario ha denegado el uso del conector";
+          } else {
+            setStatus("🔌 usando conector…");
+            try {
+              resultText = (await mcpCall(act.tool, act.args || {})).result || "(sin resultado)";
+            } catch (e) {
+              resultText = `error ejecutando el conector: ${String(e)}`;
+            }
+          }
+          apiRef.current.push({ role: "user", content: `[resultado conector]\n${resultText}` });
+          setStatus(null);
+          continue;
+        }
+
         pushUi({
           id: uid(),
           role: "assistant",
