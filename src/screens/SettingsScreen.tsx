@@ -8,7 +8,9 @@ import { ACCENTS, type Accent, colors } from "../lib/theme";
 import type { McpServerEntry, McpServerStatus, PlanInfo } from "../lib/types";
 import Glass from "../components/Glass";
 
-const WEB_URL = "http://149.202.84.78:8126";
+// Billing site: served over HTTPS from the main server. The old :8126 container
+// still answers with a stale copy of the site, so never point at the IP here.
+const WEB_URL = "https://waise.es";
 
 function fmtDuration(seconds: number | null): string {
   if (seconds == null || seconds <= 0) return "";
@@ -21,16 +23,16 @@ function fmtDuration(seconds: number | null): string {
 }
 
 const BUCKET_LABEL: Record<string, string> = {
-  lumin: "Waise Fast",
-  gpt5mini: "Waise Code",
-  kimik3: "Waise Code Pro",
-  nanoBanana: "Waise Image",
+  fast: "Waise Fast",
+  code: "Waise Code",
+  codePro: "Waise Code Pro",
+  image: "Waise Image",
 };
 
 const TOPUP_LABEL: Record<string, { label: string; short: string }> = {
-  gpt5mini_tokens: { label: "Pack Rápido (Waise Code)", short: "tokens" },
-  kimik3_tokens: { label: "Pack Razonamiento Avanzado (Waise Code Pro)", short: "tokens" },
-  dalle3_images: { label: "Pack Diseño (Waise Image)", short: "imágenes" },
+  code_tokens: { label: "Pack Rápido (Waise Code)", short: "tokens" },
+  codepro_tokens: { label: "Pack Razonamiento Avanzado (Waise Code Pro)", short: "tokens" },
+  image_packs: { label: "Pack Diseño (Waise Image)", short: "imágenes" },
 };
 
 async function openBilling(plan?: string, topup?: string) {
@@ -252,7 +254,7 @@ export default function SettingsScreen() {
             </View>
 
             <Text style={[styles.label, { marginTop: 14 }]}>Uso — 5h / semana</Text>
-            {(["lumin", "gpt5mini", "kimik3"] as const).map((b) => {
+            {(["fast", "code", "codePro"] as const).map((b) => {
               const d = plan.buckets[b];
               const unlimited = d.limit5h === -1;
               const pct = d.limit5h > 0 ? Math.min(100, Math.round((d.used5h / d.limit5h) * 100)) : 0;
@@ -274,7 +276,7 @@ export default function SettingsScreen() {
             })}
 
             <Text style={[styles.label, { marginTop: 14 }]}>Uso — cuota mensual</Text>
-            {(["nanoBanana"] as const).map((b) => {
+            {(["image"] as const).map((b) => {
               const d = plan.buckets[b];
               const pct = d.limit > 0 ? Math.min(100, Math.round((d.used / d.limit) * 100)) : 0;
               return (

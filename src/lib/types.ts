@@ -66,10 +66,10 @@ export interface PlanInfo {
   max_steps: number;
   projects: number;
   buckets: {
-    lumin: PlanWindowedBucket;
-    gpt5mini: PlanWindowedBucket;
-    kimik3: PlanWindowedBucket;
-    nanoBanana: PlanMonthlyBucket;
+    fast: PlanWindowedBucket;
+    code: PlanWindowedBucket;
+    codePro: PlanWindowedBucket;
+    image: PlanMonthlyBucket;
   };
   topups: Record<string, number>;
 }
