@@ -415,7 +415,6 @@ export default function SettingsScreen() {
 
       <Section title="Acerca de">
         <View style={styles.aboutRow}><Text style={styles.label}>Versión</Text><Text style={styles.aboutVal}>1.0.0</Text></View>
-        <View style={styles.aboutRow}><Text style={styles.label}>Servidor</Text><Text style={styles.aboutValMono}>149.202.84.78:8103</Text></View>
       </Section>
     </ScrollView>
   );
@@ -450,7 +449,6 @@ const styles = StyleSheet.create({
   logoutText: { color: "#ff98a1", fontWeight: "800" },
   aboutRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
   aboutVal: { color: colors.dim, fontSize: 13 },
-  aboutValMono: { color: colors.dim, fontSize: 12, fontFamily: "monospace" },
   planHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   planName: { fontSize: 16, fontWeight: "800" },
   usageRow: { marginTop: 10 },
